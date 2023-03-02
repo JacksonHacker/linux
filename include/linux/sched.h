@@ -544,10 +544,23 @@ struct sched_statistics {
 #endif /* CONFIG_SCHEDSTATS */
 } ____cacheline_aligned;
 
+struct mh_node {
+	unsigned long pass;
+};
+
+struct mh_tree {
+	struct mh_node **nodes;
+	unsigned int size;
+	unsigned int num_nodes;
+};
+
 struct sched_entity {
 	/* For load-balancing: */
 	struct load_weight		load;
 	struct rb_node			run_node;
+#ifdef CONFIG_MYFS_SCHED
+	struct mh_node			my_run_node;
+#endif
 	struct list_head		group_node;
 	unsigned int			on_rq;
 
