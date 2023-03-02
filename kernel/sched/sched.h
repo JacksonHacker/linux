@@ -184,6 +184,10 @@ static inline int idle_policy(int policy)
 }
 static inline int fair_policy(int policy)
 {
+#ifdef CONFIG_MYFS_SCHED
+	if (policy == SCHED_MYFS)
+		return true;
+#endif
 	return policy == SCHED_NORMAL || policy == SCHED_BATCH;
 }
 
@@ -556,6 +560,10 @@ struct cfs_rq {
 
 	u64			exec_clock;
 	u64			min_vruntime;
+#ifdef CONFIG_MYFS_SCHED
+	u64 			min_pass;
+#endif
+
 #ifdef CONFIG_SCHED_CORE
 	unsigned int		forceidle_seq;
 	u64			min_vruntime_fi;
@@ -566,7 +574,9 @@ struct cfs_rq {
 #endif
 
 	struct rb_root_cached	tasks_timeline;
-
+#ifdef CONFIG_MYFS_SCHED
+	struct mh_tree		*tree;
+#endif
 	/*
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
