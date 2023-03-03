@@ -165,7 +165,7 @@ void mh_erase(struct mh_tree *tree, struct mh_node *node)
 	if (tree->num_nodes == 0 || node_idx >= tree->num_nodes)
 		return;
 
-	swap_nodes(&tree->nodes[node_idx], &tree->nodes[last_node_idx]);
+	swap_nodes(tree->nodes[node_idx], tree->nodes[last_node_idx]);
 	tree->num_nodes--;
 
 	if (has_parent(node_idx) && node->pass < parent(tree, node_idx)[0]->pass) {
