@@ -73,7 +73,7 @@
 #define left_child(h, i) (&(h)->nodes[left_child_idx(i)])
 #define right_child(h, i) (&(h)->nodes[right_child_idx(i)])
 
-#define MH_DEFAULT_SIZE 1024
+#define MH_DEFAULT_SIZE 12
 
 #define DEFAULT_STRIDE 1
 
@@ -12426,6 +12426,7 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 	cfs_rq->tasks_timeline = RB_ROOT_CACHED;
 	u64_u32_store(cfs_rq->min_vruntime, (u64)(-(1LL << 20)));
 
+	printk(KERN_INFO "END: init_cfs_rq\n");
 #ifdef CONFIG_MYFS_SCHED
 	cfs_rq->tree = mh_init(MH_DEFAULT_SIZE);
 	if (!cfs_rq->tree) {
@@ -12436,6 +12437,7 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 #ifdef CONFIG_SMP
 	raw_spin_lock_init(&cfs_rq->removed.lock);
 #endif
+	printk(KERN_INFO "START: init_cfs_rq\n");
 }
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
