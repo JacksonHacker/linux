@@ -72,15 +72,17 @@
 #define parent(h, i) (&(h)->nodes[parent_idx(i)])
 #define left_child(h, i) (&(h)->nodes[left_child_idx(i)])
 #define right_child(h, i) (&(h)->nodes[right_child_idx(i)])
-#define swap_nodes(a, b) \
-	do { \
-		struct mh_node tmp = *(a); \
-		*(a) = *(b); \
-		*(b) = tmp; \
-	} while (0)
+
 #define MH_DEFAULT_SIZE 1024
 
 #define DEFAULT_STRIDE 1
+
+void swap_nodes(struct mh_node *a, struct mh_node *b)
+{
+	struct mh_node tmp = *a;
+	*a = *b;
+	*b = tmp;
+}
 
 struct mh_tree *mh_init(unsigned int size)
 {
@@ -132,7 +134,7 @@ void mh_heapify(struct mh_tree *tree, unsigned int i)
 			min_child = left_child(tree, i);
 
 		if (min_child[0]->pass < parent->pass) {
-			swap_nodes(min_child, &tree->nodes[i]);
+			swap_nodes(*min_child, tree->nodes[i]);
 			i = min_child - tree->nodes;
 		} else {
 			break;
@@ -745,7 +747,7 @@ static inline bool entity_before(const struct sched_entity *a,
 				 const struct sched_entity *b)
 {
 #ifdef CONFIG_MYFS_SCHED
-	return (s64)(a->my_run_node->pass - b->my_run_node->pass) < 0;
+	return (s64)(a->my_run_node.pass - b->my_run_node.pass) < 0;
 #else
 	return (s64)(a->vruntime - b->vruntime) < 0;
 #endif
@@ -792,7 +794,7 @@ static void update_min_pass(struct cfs_rq *cfs_rq)
 
 	if (curr) {
 		if (curr->on_rq)
-			pass = curr->pass;
+			pass = curr->my_run_node.pass;
 		else
 			curr = NULL;
 	}
@@ -801,9 +803,9 @@ static void update_min_pass(struct cfs_rq *cfs_rq)
 		struct sched_entity *se = __mh_node_2_se(min_node);
 
 		if (!curr)
-			pass = se->my_run_node->pass;
+			pass = se->my_run_node.pass;
 		else
-			pass = min_pass(pass, se->my_run_node->pass);
+			pass = min_pass(pass, se->my_run_node.pass);
 	}
 
 	u64_u32_store(cfs_rq->min_pass,
@@ -5186,7 +5188,7 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	se->prev_sum_exec_runtime = se->sum_exec_runtime;
 
 #ifdef CONFIG_MYFS_SCHED
-	cfs_rq->min_pass = se->my_run_node->pass;
+	cfs_rq->min_pass = se->my_run_node.pass;
 #endif
 }
 
@@ -12424,7 +12426,7 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 	cfs_rq->tasks_timeline = RB_ROOT_CACHED;
 	u64_u32_store(cfs_rq->min_vruntime, (u64)(-(1LL << 20)));
 
-#ifdef define CONFIG_MYFS_SCHED
+#ifdef CONFIG_MYFS_SCHED
 	cfs_rq->tree = mh_init(MH_DEFAULT_SIZE);
 	if (!cfs_rq->tree) {
 		printk(KERN_ERR "Failed to allocate memory for cfs_rq->tree when init_cfs_rq()\n");
