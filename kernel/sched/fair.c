@@ -52,9 +52,133 @@
 
 #include <linux/sched/cond_resched.h>
 
+#include <linux/container_of.h>
+#include <linux/sched.h>
+
 #include "sched.h"
 #include "stats.h"
 #include "autogroup.h"
+
+#define	mh_entry(ptr, type, member) container_of(ptr, type, member)
+#define __mh_node_2_se(node) \
+	mh_entry((node), struct sched_entity, my_run_node)
+
+#define parent_idx(i) ((i) / 2)
+#define left_child_idx(i) ((i) * 2)
+#define right_child_idx(i) ((i) * 2 + 1)
+#define has_parent(i) ((i) > 1)
+#define has_left_child(i, n) (left_child_idx(i) <= (n))
+#define has_right_child(i, n) (right_child_idx(i) <= (n))
+#define parent(h, i) (&(h)->nodes[parent_idx(i)])
+#define left_child(h, i) (&(h)->nodes[left_child_idx(i)])
+#define right_child(h, i) (&(h)->nodes[right_child_idx(i)])
+#define swap_nodes(a, b) \
+	do { \
+		struct mh_node tmp = *(a); \
+		*(a) = *(b); \
+		*(b) = tmp; \
+	} while (0)
+#define MH_DEFAULT_SIZE 1024
+
+#define DEFAULT_STRIDE 1
+
+struct mh_tree *mh_init(unsigned int size)
+{
+	struct mh_tree *tree = kmalloc(sizeof(*tree), GFP_KERNEL);
+
+	if (!tree) {
+		pr_err("Failed to allocate memory for mh_tree\n");
+		return NULL;
+	}
+
+	tree->nodes = kmalloc((size + 1) * sizeof(*tree->nodes), GFP_KERNEL);
+
+	if (!tree->nodes) {
+		pr_err("Failed to allocate memory for mh_tree nodes\n");
+		kfree(tree);
+		return NULL;
+	}
+
+	tree->size = size;
+	tree->num_nodes = 0;
+
+	return tree;
+}
+
+void mh_cleanup(struct mh_tree *tree)
+{
+	kfree(tree->nodes);
+	tree->nodes = NULL;
+	tree->size = 0;
+	tree->num_nodes = 0;
+}
+
+int mh_is_empty(const struct mh_tree *tree)
+{
+	return tree->num_nodes == 0;
+}
+
+void mh_heapify(struct mh_tree *tree, unsigned int i)
+{
+	while (has_left_child(i, tree->num_nodes)) {
+		struct mh_node *parent = tree->nodes[i];
+		struct mh_node *left = *left_child(tree, i);
+		struct mh_node *right = has_right_child(i, tree->num_nodes) ? *right_child(tree, i) : NULL;
+		struct mh_node **min_child;
+
+		if (right && right->pass < left->pass)
+			min_child = right_child(tree, i);
+		else
+			min_child = left_child(tree, i);
+
+		if (min_child[0]->pass < parent->pass) {
+			swap_nodes(min_child, &tree->nodes[i]);
+			i = min_child - tree->nodes;
+		} else {
+			break;
+		}
+	}
+}
+
+void mh_insert(struct mh_tree *tree, struct mh_node *node)
+{
+	if (tree->num_nodes >= tree->size - 1) {
+		unsigned int new_size = tree->size ? tree->size * 2 : 8;
+		tree->nodes = krealloc(tree->nodes, new_size * sizeof(*tree->nodes), GFP_KERNEL);
+		if (!tree->nodes) {
+			pr_err("Failed to allocate memory in mh_insert()\n");
+		}
+		tree->size = new_size;
+	}
+
+	tree->nodes[++tree->num_nodes] = node;
+	mh_heapify(tree, tree->num_nodes);
+}
+
+void mh_erase(struct mh_tree *tree, struct mh_node *node)
+{
+	unsigned int node_idx = node - tree->nodes[0];
+	unsigned int last_node_idx = tree->num_nodes - 1;
+
+	if (tree->num_nodes == 0 || node_idx >= tree->num_nodes)
+		return;
+
+	swap_nodes(&tree->nodes[node_idx], &tree->nodes[last_node_idx]);
+	tree->num_nodes--;
+
+	if (has_parent(node_idx) && node->pass < parent(tree, node_idx)[0]->pass) {
+		mh_heapify(tree, node_idx);
+	} else {
+		mh_heapify(tree, 1);
+	}
+}
+
+struct mh_node *mh_min(struct mh_tree *tree)
+{
+	return tree->num_nodes == 0 ? NULL : tree->nodes[1];
+}
+
+
 
 /*
  * Targeted preemption latency for CPU-bound tasks:
@@ -586,6 +710,17 @@ static inline u64 max_vruntime(u64 max_vruntime, u64 vruntime)
 	return max_vruntime;
 }
 
+#ifdef CONFIG_MYFS_SCHED
+static inline u64 max_pass(u64 max_pass, u64 pass)
+{
+	s64 delta = (s64)(pass - max_pass);
+	if (delta > 0)
+		max_pass = pass;
+
+	return max_pass;
+}
+#endif
+
 static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 {
 	s64 delta = (s64)(vruntime - min_vruntime);
@@ -595,10 +730,25 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 	return min_vruntime;
 }
 
+#ifdef CONFIG_MYFS_SCHED
+static inline u64 min_pass(u64 min_pass, u64 pass)
+{
+	s64 delta = (s64)(pass - min_pass);
+	if (delta < 0)
+		min_pass = pass;
+
+	return min_pass;
+}
+#endif
+
 static inline bool entity_before(const struct sched_entity *a,
 				 const struct sched_entity *b)
 {
+#ifdef CONFIG_MYFS_SCHED
+	return (s64)(a->my_run_node->pass - b->my_run_node->pass) < 0;
+#else
 	return (s64)(a->vruntime - b->vruntime) < 0;
+#endif
 }
 
 #define __node_2_se(node) \
@@ -632,6 +782,35 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 		      max_vruntime(cfs_rq->min_vruntime, vruntime));
 }
 
+#ifdef CONFIG_MYFS_SCHED
+static void update_min_pass(struct cfs_rq *cfs_rq)
+{
+	struct sched_entity *curr = cfs_rq->curr;
+	struct mh_node *min_node = mh_min(cfs_rq->tree);
+
+	u64 pass = cfs_rq->min_pass;
+
+	if (curr) {
+		if (curr->on_rq)
+			pass = curr->pass;
+		else
+			curr = NULL;
+	}
+
+	if (min_node) {
+		struct sched_entity *se = __mh_node_2_se(min_node);
+
+		if (!curr)
+			pass = se->my_run_node->pass;
+		else
+			pass = min_pass(pass, se->my_run_node->pass);
+	}
+
+	u64_u32_store(cfs_rq->min_pass,
+		      max_pass(cfs_rq->min_pass, pass));
+}
+#endif
+
 static inline bool __entity_less(struct rb_node *a, const struct rb_node *b)
 {
 	return entity_before(__node_2_se(a), __node_2_se(b));
@@ -643,21 +822,35 @@ static inline bool __entity_less(struct rb_node *a, const struct rb_node *b)
 static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	rb_add_cached(&se->run_node, &cfs_rq->tasks_timeline, __entity_less);
+
+#ifdef CONFIG_MYFS_SCHED
+	mh_insert(cfs_rq->tree, &se->my_run_node);
+#endif
 }
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
+
+#ifdef CONFIG_MYFS_SCHED
+	mh_erase(cfs_rq->tree, &se->my_run_node);
+#endif
 }
 
 struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
 {
+#ifdef CONFIG_MYFS_SCHED
+	struct mh_node *min_node = mh_min(cfs_rq->tree);
+
+	return !min_node ? NULL : __mh_node_2_se(min_node);
+#else
 	struct rb_node *left = rb_first_cached(&cfs_rq->tasks_timeline);
 
 	if (!left)
 		return NULL;
 
 	return __node_2_se(left);
+#endif
 }
 
 static struct sched_entity *__pick_next_entity(struct sched_entity *se)
@@ -922,6 +1115,9 @@ static void update_curr(struct cfs_rq *cfs_rq)
 
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
 	update_min_vruntime(cfs_rq);
+#ifdef CONFIG_MYFS_SCHED
+	update_min_pass(cfs_rq);
+#endif
 
 	if (entity_is_task(curr)) {
 		struct task_struct *curtask = task_of(curr);
@@ -4740,8 +4936,12 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * If we're the current task, we must renormalise before calling
 	 * update_curr().
 	 */
-	if (renorm && curr)
+	if (renorm && curr) {
 		se->vruntime += cfs_rq->min_vruntime;
+#ifdef CONFIG_MYFS_SCHED
+		se->my_run_node.pass += cfs_rq->min_pass;
+#endif
+	}
 
 	update_curr(cfs_rq);
 
@@ -4751,8 +4951,12 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * placed in the past could significantly boost this task to the
 	 * fairness detriment of existing tasks.
 	 */
-	if (renorm && !curr)
+	if (renorm && !curr) {
 		se->vruntime += cfs_rq->min_vruntime;
+#ifdef CONFIG_MYFS_SCHED
+		se->my_run_node.pass += cfs_rq->min_pass;
+#endif
+	}
 
 	/*
 	 * When enqueuing a sched_entity, we must:
@@ -4886,8 +5090,13 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * put back on, and if we advance min_vruntime, we'll be placed back
 	 * further than we started -- ie. we'll be penalized.
 	 */
-	if ((flags & (DEQUEUE_SAVE | DEQUEUE_MOVE)) != DEQUEUE_SAVE)
+	if ((flags & (DEQUEUE_SAVE | DEQUEUE_MOVE)) != DEQUEUE_SAVE) {
 		update_min_vruntime(cfs_rq);
+#ifdef CONFIG_MYFS_SCHED
+		update_min_pass(cfs_rq);
+#endif
+	}
+
 
 	if (cfs_rq->nr_running == 0)
 		update_idle_cfs_rq_clock_pelt(cfs_rq);
@@ -4975,6 +5184,10 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	}
 
 	se->prev_sum_exec_runtime = se->sum_exec_runtime;
+
+#ifdef CONFIG_MYFS_SCHED
+	cfs_rq->min_pass = se->my_run_node->pass;
+#endif
 }
 
 static int
@@ -5065,6 +5278,10 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 static void
 entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 {
+#ifdef CONFIG_MYFS_SCHED
+	curr->my_run_node.pass += DEFAULT_STRIDE;
+#endif
+
 	/*
 	 * Update run-time statistics of the 'current'.
 	 */
@@ -7803,7 +8020,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		goto preempt;
 
 	/*
-	 * Batch and idle tasks do not preempt non-idle tasks (their preemption
+	 * Batch, idle, and myfs tasks do not preempt non-idle tasks (their preemption
 	 * is driven by the tick):
 	 */
 	if (unlikely(p->policy != SCHED_NORMAL) || !sched_feat(WAKEUP_PREEMPTION))
@@ -8070,7 +8287,11 @@ static void yield_task_fair(struct rq *rq)
 
 	clear_buddies(cfs_rq, se);
 
-	if (curr->policy != SCHED_BATCH) {
+	if (curr->policy != SCHED_BATCH
+#ifdef CONFIG_MYFS_SCHED
+		&& curr->policy != SCHED_MYFS
+#endif
+	    ) {
 		update_rq_clock(rq);
 		/*
 		 * Update run-time statistics of the 'current'.
@@ -12202,6 +12423,14 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 {
 	cfs_rq->tasks_timeline = RB_ROOT_CACHED;
 	u64_u32_store(cfs_rq->min_vruntime, (u64)(-(1LL << 20)));
+
+#ifdef define CONFIG_MYFS_SCHED
+	cfs_rq->tree = mh_init(MH_DEFAULT_SIZE);
+	if (!cfs_rq->tree) {
+		printk(KERN_ERR "Failed to allocate memory for cfs_rq->tree when init_cfs_rq()\n");
+	}
+#endif
+
 #ifdef CONFIG_SMP
 	raw_spin_lock_init(&cfs_rq->removed.lock);
 #endif
