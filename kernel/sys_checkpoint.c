@@ -10,6 +10,7 @@
 #include <linux/time64.h> // struct timespec64
 #include <linux/timekeeping.h> // ktime_get_real_ts64()
 #include <linux/types.h> // pid_t
+#include <linux/minmax.h>
 
 #define CP_FILE_PREFIX "/tmp/cp_"
 #define CP_FILENAME_MAX_LENGTH 256
@@ -53,7 +54,8 @@ struct cp_vma_header {
 	unsigned long map_flags;  // Map Type Flags
 };
 
-static int write_vma_metadata(struct file *file, struct cp_vma_header *header, loff_t *pos) {
+static int write_vma_metadata(struct file *file, struct cp_vma_header *header, loff_t *pos)
+{
 	int ret;
 
 	ret = kernel_write(file, &header, sizeof(header), pos);
@@ -65,7 +67,8 @@ static int write_vma_metadata(struct file *file, struct cp_vma_header *header, l
 	return 0;
 }
 
-static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_t *pos) {
+static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_t *pos)
+{
 	int ret;
 
 	void *kbuffer = kvmalloc(header->len, GFP_KERNEL);
@@ -108,27 +111,46 @@ static int checkpoint_memory_range(struct file *file, void __user *start_addr, v
 
 		// Only Checkpoint: Heap, Stack, .bss segment, private
 		// & anon memory-mapped regions, shared & anon memory-mapped regions
-		if (!(vma->vm_flags & VM_ANON)) {
+		if (!(vma->vm_flags & VM_ANON))
 			continue;
-		}
 
-		header.start_addr = max(vma->vm_start, (unsigned long)start_addr);
-		header.len = min(vma->vm_end, (unsigned long)end_addr) - header.start_addr;
+		header.start_addr = max_t(unsigned long, vma->vm_start, start_addr);
+		header.len = min_t(unsigned long, vma->vm_end, end_addr) - header.start_addr;
 		header.prot_flags = (unsigned long)vma->vm_page_prot.pgprot;
 		header.map_flags = (unsigned long)vma->vm_flags;
 
 		// Write metadata
-		if ((ret = write_vma_metadata(file, &header, &pos)) < 0) {
+		ret = write_vma_metadata(file, &header, &pos);
+		if (ret < 0)
 			return ret;
-		}
+
 
 		// Write VMA data
-		if ((ret = write_vma_data(file, &header, &pos)) < 0) {
+		ret = write_vma_data(file, &header, &pos);
+		if (ret < 0)
 			return ret;
-		}
+
 	}
 
 	return ret;
+}
+
+static struct file *get_filp(pid_t pid)
+{
+	// Generate a unique filename for each checkpoint
+	char cp_filename[CP_FILENAME_MAX_LENGTH];
+	err = get_cp_filename(cp_filename, sizeof(cp_filename), pid);
+	if (err != 0)
+		return NULL;
+
+	// Create a file
+	struct file *filp = filp_open(cp_filename, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+	if (IS_ERR(filp)) {
+		pr_err("filp_open(%s) failed\n", cp_filename);
+		return NULL;
+	}
+
+	return filp;
 }
 
 SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
@@ -136,30 +158,24 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 	int err = 0;
 	struct mm_struct *mm = current->mm;
 
-	if (start_addr >= end_addr) {
+	if (start_addr >= end_addr)
 		return -EINVAL;
-	}
 
 	// handle multithreading cases; used for get cp filename;
 	pid_t pid = current->group_leader->pid;
 
-	// Generate a unique filename for each checkpoint
-	char cp_filename[CP_FILENAME_MAX_LENGTH];
-	if ((err = get_cp_filename(cp_filename, sizeof(cp_filename), pid)) != 0)
-		return err;
-
-	// Create a file
-	struct file *file = filp_open(cp_filename, O_CREAT | O_WRONLY | O_TRUNC, 0600);
-	if (IS_ERR(file)) {
-		pr_err("filp_open(%s) failed\n", cp_filename);
-		return PTR_ERR(file);
+	struct file *filp = get_filp(pid);
+	if (!filp) {
+		pr_err("get file pointer failed\n");
+		return -EIO;
 	}
+
 
 	// Guarantee the virtual memory layout unchanged.
 	down_read(&mm->mmap_sem);
 
 	// Checkpoint!
-	err = checkpoint_memory_range(file, start_addr, end_addr);
+	err = checkpoint_memory_range(filp, start_addr, end_addr);
 
 	// Close the file and release the lock
 	up_read(&mm->mmap_sem);
