@@ -9,6 +9,8 @@
 #define SMALL_BLOCK_SIZE 10
 #define LARGE_BLOCK_SIZE (1024 * 1024)
 
+int u; // uninitialized.
+
 static int test_cp_range(void)
 {
 	int arr1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
