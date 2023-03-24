@@ -60,9 +60,8 @@ static int write_vma_metadata(struct file *file, struct cp_vma_header *header, l
 {
 	int ret;
 
-	printk("sizeof(cp_vma_header): %lu", sizeof(struct cp_vma_header));
-	ret = kernel_write(file, &header, sizeof(struct cp_vma_header), pos);
-	if (ret != sizeof(header)) {
+	ret = kernel_write(file, header, sizeof(struct cp_vma_header), pos);
+	if (ret != sizeof(struct cp_vma_header)) {
 		pr_err("kernel_write(vma_metadata). failed\n");
 		return -EIO;
 	}
@@ -161,6 +160,9 @@ static struct file *get_filp(pid_t pid)
 
 SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 {
+	printk("sizeof(unsigned long): %lu", sizeof(unsigned long));
+	printk("sizeof(cp_vma_header): %lu", sizeof(struct cp_vma_header));
+
 	int err = 0;
 	struct mm_struct *mm = current->mm;
 	pid_t pid;
