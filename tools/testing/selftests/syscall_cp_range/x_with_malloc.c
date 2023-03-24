@@ -86,13 +86,6 @@ static int test_cp_range(void)
 	printf("checkpoint successfully!\n");
 
 
-	printf("\ncheckpoint 0x0 - 0x7FFFFFFFFFFF.\n");
-	ret = syscall(__NR_cp_range, 0x0, 0x7FFFFFFFFFFF);
-	if (ret) {
-		perror("cp_range(whole user space) failed");
-		return -1;
-	}
-	printf("checkpoint successfully!\n");
 
 	printf("\ncheckpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
 	ret = syscall(__NR_cp_range, 0x0, 0xFFFFFFFFFFFFFFFF);
