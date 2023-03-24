@@ -21,7 +21,9 @@ void *thread_func(void *arg)
 
 
 	// Sleep for a long time
+	printf("\nThread %ld sleeping...\n", (long)arg);
 	sleep(999999999);
+	printf("Thread %ld task wakes up.\n", (long)arg);
 
 	free(small_block);
 	free(large_block);
@@ -37,7 +39,11 @@ int main(void)
 	pthread_create(&thread1, NULL, thread_func, (void *)1);
 	pthread_create(&thread2, NULL, thread_func, (void *)2);
 
-	printf("\ncheckpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
+	printf("Group leader task is sleeping...\n");
+	sleep(3);
+	printf("Group leader task wakes up.\n");
+
+	printf("\nGroup leader task: checkpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
 	ret = syscall(__NR_cp_range, 0x0, 0xFFFFFFFFFFFFFFFF);
 	if (ret)
 		perror("cp_range(whole virtual space) failed");
