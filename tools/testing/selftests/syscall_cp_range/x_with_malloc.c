@@ -9,7 +9,9 @@
 #define SMALL_BLOCK_SIZE 10
 #define LARGE_BLOCK_SIZE (1024 * 1024)
 
-int u; // uninitialized.
+// uninitialized.
+int u;
+static int u1;
 
 static int test_cp_range(void)
 {
