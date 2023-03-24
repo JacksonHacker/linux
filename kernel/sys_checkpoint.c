@@ -163,6 +163,7 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 	int err = 0;
 	struct mm_struct *mm = current->mm;
 	pid_t pid;
+	struct file *filp;
 
 	if (start_addr >= end_addr)
 		return -EINVAL;
@@ -170,7 +171,7 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 	// handle multithreading cases; used for get cp filename;
 	pid = current->group_leader->pid;
 
-	struct file *filp = get_filp(pid);
+	filp = get_filp(pid);
 	if (!filp) {
 		pr_err("get file pointer failed\n");
 		return -EIO;
