@@ -41,14 +41,14 @@ int main(void)
 
 	printf("Group leader task is sleeping...\n");
 	sleep(3);
-	printf("Group leader task wakes up.\n");
+	printf("\nGroup leader task wakes up.\n");
 
 	printf("\nGroup leader task: checkpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
 	ret = syscall(__NR_cp_range, 0x0, 0xFFFFFFFFFFFFFFFF);
 	if (ret)
 		perror("cp_range(whole virtual space) failed");
-
-	printf("checkpoint successfully!\n");
+	else
+		printf("checkpoint successfully!\n");
 
 
 	pthread_join(thread1, NULL);

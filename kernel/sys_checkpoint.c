@@ -83,7 +83,7 @@ static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_
 
 	if (copy_from_user(kbuffer, (const void *)header->start_addr, header->len)) {
 		kvfree(kbuffer);
-		pr_err("copy_from_user(..., cp_start=%lu, len=%lu) failed\n",
+		pr_err("copy_from_user(..., cp_start=0x%lx, len=%lu) failed\n",
 		       header->start_addr, header->len);
 		ret = -EFAULT;
 		return ret;
@@ -131,16 +131,12 @@ static int checkpoint_memory_range(struct file *file, void __user *start_addr, v
 		// Write metadata
 		ret = write_vma_metadata(file, &header, &file_offset);
 		if (ret < 0) {
-			printk("%d VMAs have been checkpointed.",
-			       checkpointed_vma_count);
 			return ret;
 		}
 
 		// Write VMA data
 		ret = write_vma_data(file, &header, &file_offset);
 		if (ret < 0) {
-			printk("%d VMAs have been checkpointed.",
-			       checkpointed_vma_count);
 			return ret;
 		}
 
@@ -204,6 +200,8 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 
 	// Checkpoint!
 	err = checkpoint_memory_range(filp, start_addr, end_addr);
+	if (err < 0)
+		pr_err("checkpoint with error.\n");
 
 	// Close the file and release the lock
 	up_read(&mm->mmap_lock);
