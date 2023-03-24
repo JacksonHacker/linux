@@ -74,6 +74,7 @@ TARGETS += sparc64
 TARGETS += splice
 TARGETS += static_keys
 TARGETS += sync
+TARGETS += syscall_cp_range
 TARGETS += syscall_user_dispatch
 TARGETS += sysctl
 TARGETS += tc-testing
