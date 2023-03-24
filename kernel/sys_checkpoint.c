@@ -103,11 +103,16 @@ static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_
 
 static int checkpoint_memory_range(struct file *file, void __user *start_addr, void __user *end_addr)
 {
-	struct mm_struct *mm = current->mm;
+	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 	struct cp_vma_header header;
-	loff_t file_offset = 0;
-	int ret = 0;
+	loff_t file_offset;
+	int ret;
+
+	mm = current->mm;
+	file_offset = 0;
+	ret = 0;
+
 
 	VMA_ITERATOR(vmi, mm, (unsigned long)start_addr);
 	for_each_vma_range(vmi, vma, (unsigned long)end_addr) {
@@ -163,10 +168,13 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 	printk("sizeof(unsigned long): %lu", sizeof(unsigned long));
 	printk("sizeof(cp_vma_header): %lu", sizeof(struct cp_vma_header));
 
-	int err = 0;
-	struct mm_struct *mm = current->mm;
+	int err;
+	struct mm_struct *mm;
 	pid_t pid;
 	struct file *filp;
+
+	err = 0;
+	mm = current->mm;
 
 	if (start_addr >= end_addr)
 		return -EINVAL;
