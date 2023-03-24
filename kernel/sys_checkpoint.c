@@ -72,6 +72,7 @@ static int write_vma_metadata(struct file *file, struct cp_vma_header *header, l
 static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_t *pos)
 {
 	int ret;
+	ssize_t written;
 
 	void *kbuffer = kvmalloc(header->len, GFP_KERNEL);
 	if (!kbuffer) {
@@ -89,7 +90,7 @@ static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_
 	}
 
 	// A real persistent operation!
-	ssize_t written = kernel_write(file, kbuffer, header->len, pos);
+	written = kernel_write(file, kbuffer, header->len, pos);
 	kvfree(kbuffer);
 	if (written != header->len) {
 		pr_err("kernel_write(vma_data) failed\n");
@@ -139,6 +140,8 @@ static int checkpoint_memory_range(struct file *file, void __user *start_addr, v
 
 static struct file *get_filp(pid_t pid)
 {
+	struct file *filp;
+
 	// Generate a unique filename for each checkpoint
 	char cp_filename[CP_FILENAME_MAX_LENGTH];
 	int err = get_cp_filename(cp_filename, sizeof(cp_filename), pid);
@@ -146,7 +149,7 @@ static struct file *get_filp(pid_t pid)
 		return NULL;
 
 	// Create a file
-	struct file *filp = filp_open(cp_filename, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+	filp = filp_open(cp_filename, O_CREAT | O_WRONLY | O_TRUNC, 0600);
 	if (IS_ERR(filp)) {
 		pr_err("filp_open(%s) failed\n", cp_filename);
 		return NULL;
@@ -159,12 +162,13 @@ SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 {
 	int err = 0;
 	struct mm_struct *mm = current->mm;
+	pid_t pid;
 
 	if (start_addr >= end_addr)
 		return -EINVAL;
 
 	// handle multithreading cases; used for get cp filename;
-	pid_t pid = current->group_leader->pid;
+	pid = current->group_leader->pid;
 
 	struct file *filp = get_filp(pid);
 	if (!filp) {
