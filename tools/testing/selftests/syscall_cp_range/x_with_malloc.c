@@ -52,7 +52,7 @@ static int test_cp_range(void)
 	}
 
 	// Checkpoint the small blocks of memory
-	printf("checkpoint small_block1 with %d bytes.\n", SMALL_BLOCK_SIZE);
+	printf("\ncheckpoint small_block1 with %d bytes.\n", SMALL_BLOCK_SIZE);
 	ret = syscall(__NR_cp_range, small_block1, small_block1 + SMALL_BLOCK_SIZE);
 	if (ret < 0) {
 		printf("cp_range syscall for small_block1 failed: %ld\n", ret);
@@ -60,7 +60,7 @@ static int test_cp_range(void)
 	}
 	printf("checkpoint successfully!\n");
 
-	printf("checkpoint small_block2 with %d bytes.\n", SMALL_BLOCK_SIZE);
+	printf("\ncheckpoint small_block2 with %d bytes.\n", SMALL_BLOCK_SIZE);
 	ret = syscall(__NR_cp_range, small_block2, small_block2 + SMALL_BLOCK_SIZE);
 	if (ret < 0) {
 		printf("cp_range syscall for small_block2 failed: %ld\n", ret);
@@ -69,7 +69,7 @@ static int test_cp_range(void)
 	printf("checkpoint successfully!\n");
 
 	// Checkpoint the large blocks of memory
-	printf("checkpoint large_block1 with %d bytes.\n", LARGE_BLOCK_SIZE);
+	printf("\ncheckpoint large_block1 with %d bytes.\n", LARGE_BLOCK_SIZE);
 	ret = syscall(__NR_cp_range, large_block1, large_block1 + LARGE_BLOCK_SIZE);
 	if (ret < 0) {
 		printf("cp_range syscall for large_block1 failed: %ld\n", ret);
@@ -77,7 +77,7 @@ static int test_cp_range(void)
 	}
 	printf("checkpoint successfully!\n");
 
-	printf("checkpoint large_block2 with %d bytes.\n", LARGE_BLOCK_SIZE);
+	printf("\ncheckpoint large_block2 with %d bytes.\n", LARGE_BLOCK_SIZE);
 	ret = syscall(__NR_cp_range, large_block2, large_block2 + LARGE_BLOCK_SIZE);
 	if (ret < 0) {
 		printf("cp_range syscall for large_block2 failed: %ld\n", ret);
@@ -86,7 +86,7 @@ static int test_cp_range(void)
 	printf("checkpoint successfully!\n");
 
 
-	printf("checkpoint 0x0 - 0x7FFFFFFFFFFF.\n");
+	printf("\ncheckpoint 0x0 - 0x7FFFFFFFFFFF.\n");
 	ret = syscall(__NR_cp_range, 0x0, 0x7FFFFFFFFFFF);
 	if (ret) {
 		perror("cp_range(whole user space) failed");
@@ -94,7 +94,7 @@ static int test_cp_range(void)
 	}
 	printf("checkpoint successfully!\n");
 
-	printf("checkpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
+	printf("\ncheckpoint 0x0 - 0xFFFFFFFFFFFFFFFF.\n");
 	ret = syscall(__NR_cp_range, 0x0, 0xFFFFFFFFFFFFFFFF);
 	if (ret) {
 		perror("cp_range(whole virtual space) failed");
@@ -118,7 +118,7 @@ static int test_cp_range(void)
 int main(void)
 {
 	int ret;
-	
+
 	u = 1;
 	u1 = 2;
 
