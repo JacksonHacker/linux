@@ -165,6 +165,7 @@ static struct file *get_filp(pid_t pid)
 
 SYSCALL_DEFINE2(cp_range, void __user *, start_addr, void __user *, end_addr)
 {
+	printk("size(int): %lu\n", sizeof(int));
 	printk("sizeof(unsigned long): %lu", sizeof(unsigned long));
 	printk("sizeof(cp_vma_header): %lu", sizeof(struct cp_vma_header));
 
