@@ -60,6 +60,7 @@ static int write_vma_metadata(struct file *file, struct cp_vma_header *header, l
 {
 	int ret;
 
+	printk("sizeof(cp_vma_header): %lu", sizeof(struct cp_vma_header));
 	ret = kernel_write(file, &header, sizeof(struct cp_vma_header), pos);
 	if (ret != sizeof(header)) {
 		pr_err("kernel_write(vma_metadata). failed\n");
