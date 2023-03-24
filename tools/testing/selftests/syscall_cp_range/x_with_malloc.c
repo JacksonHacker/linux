@@ -118,6 +118,9 @@ static int test_cp_range(void)
 int main(void)
 {
 	int ret;
+	
+	u = 1;
+	u1 = 2;
 
 	ret = test_cp_range();
 	if (ret) {
