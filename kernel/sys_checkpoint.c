@@ -130,16 +130,19 @@ static int checkpoint_memory_range(struct file *file, void __user *start_addr, v
 
 		// Write metadata
 		ret = write_vma_metadata(file, &header, &file_offset);
-		if (ret < 0)
-			printk("%d VMAs have been checkpointed.", checkpointed_vma_count);
+		if (ret < 0) {
+			printk("%d VMAs have been checkpointed.",
+			       checkpointed_vma_count);
 			return ret;
-
+		}
 
 		// Write VMA data
 		ret = write_vma_data(file, &header, &file_offset);
-		if (ret < 0)
-			printk("%d VMAs have been checkpointed.", checkpointed_vma_count);
+		if (ret < 0) {
+			printk("%d VMAs have been checkpointed.",
+			       checkpointed_vma_count);
 			return ret;
+		}
 
 		checkpointed_vma_count++;
 	}
