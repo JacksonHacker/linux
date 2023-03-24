@@ -101,6 +101,14 @@ static int write_vma_data(struct file *file, struct cp_vma_header *header, loff_
 	return 0;
 }
 
+static bool is_vma_readable(struct vm_area_struct *vma)
+{
+	if (!vma)
+		return false;
+
+	return (vma->vm_flags & VM_READ) != 0;
+}
+
 static int checkpoint_memory_range(struct file *file, void __user *start_addr, void __user *end_addr)
 {
 	struct mm_struct *mm;
@@ -120,7 +128,8 @@ static int checkpoint_memory_range(struct file *file, void __user *start_addr, v
 
 		// Only Checkpoint: Heap, Stack, .bss segment, private
 		// & anon memory-mapped regions, shared & anon memory-mapped regions
-		if (!vma_is_anonymous(vma))
+		// Don't try to checkpoint non-readable VMA.
+		if (!vma_is_anonymous(vma) || !is_vma_readable(vma))
 			continue;
 
 		header.start_addr = max_t(unsigned long, vma->vm_start, start_addr);
